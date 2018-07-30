@@ -56,35 +56,44 @@ func main() {
 		log.Fatal(err)
 	}
 
-	os.Setenv("PORT", "8080") // remove on deploy
-	port := os.Getenv("PORT")
-	if port == "" {
-		log.Fatal("$PORT must be set")
-	}
-
-	r := mux.NewRouter()
-
-	cors := handlers.CORS(
-		handlers.AllowCredentials(),
-		handlers.AllowedOrigins([]string{frontendURI}),
-		handlers.AllowedMethods([]string{"GET"}), // OPTIONS?
-		handlers.MaxAge(600),                     // 300?
-	)
-
-	r.Use(cors)
-	r.Use(handlers.RecoveryHandler())
-
 	store.Options = &sessions.Options{
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false, // true on deploy
-		MaxAge:   0,
+		// Secure:   false, // true on deploy
+		Secure: true,
+		MaxAge: 0,
 	}
 
-	r.HandleFunc("/login", loginHandler)
-	r.HandleFunc("/playlist", playlistHandler)
+	r := mux.NewRouter()
+	r.Use(handlers.RecoveryHandler())
 
-	http.ListenAndServe(":"+port, r)
+	api := r.PathPrefix("/api/v1/").Subrouter()
+	api.HandleFunc("/login", loginHandler)
+	api.HandleFunc("/playlist", playlistHandler)
+
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	r.PathPrefix("/").HandlerFunc(indexHandler("./index.html"))
+
+	// os.Setenv("PORT", "8080") // remove on deploy
+	port, err := getPort()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	srv := &http.Server{
+		Handler: handlers.LoggingHandler(os.Stdout, r),
+		// Addr:         "127.0.0.1:" + port,
+		Addr:         ":" + port,
+		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  15 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
+}
+
+func indexHandler(addr string) func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, addr)
+	})
 }
 
 // loginHandler responds to requests with an authorization URL configured for a
@@ -220,4 +229,15 @@ func verifyEnv() error {
 	default:
 		return nil
 	}
+}
+
+// getPort returns the port from the $PORT environment variable as a string.
+// Returns an error if $PORT is not set.
+func getPort() (string, error) {
+	p := os.Getenv("PORT")
+	if p == "" {
+		return "", errors.New("$PORT must be set")
+	}
+
+	return p, nil
 }
