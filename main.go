@@ -28,7 +28,8 @@ const (
 )
 
 var (
-	frontendURI          = os.Getenv("FRONTEND_URI")
+	//frontendURI          = os.Getenv("FRONTEND_URI")
+	frontendURI          = "http://127.0.0.1:3000"
 	redirectURI          = frontendURI + "/results"
 	hashKey, hashErr     = hex.DecodeString(os.Getenv("DISCOVER_HASH"))
 	storeAuth, authErr   = hex.DecodeString(os.Getenv("DISCOVER_AUTH"))
@@ -83,16 +84,16 @@ func main() {
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	r.PathPrefix("/").HandlerFunc(indexHandler("./index.html"))
 
-	// os.Setenv("PORT", "8080") // remove on deploy
-	port, err := getPort()
-	if err != nil {
-		log.Fatal(err)
-	}
+	//os.Setenv("PORT", "8080") // remove on deploy
+	//port, err := getPort()
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 
 	srv := &http.Server{
 		Handler: handlers.LoggingHandler(os.Stdout, r),
-		// Addr:         "127.0.0.1:" + port,
-		Addr:         ":" + port,
+		Addr:    "127.0.0.1:8080",
+		//Addr:         ":" + port,
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
