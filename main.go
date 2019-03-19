@@ -4,6 +4,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"github.com/Henry-Sarabia/scry"
+	"github.com/Henry-Sarabia/scry/spotifyservice"
 	"log"
 	"net/http"
 	"os"
@@ -25,20 +28,26 @@ const (
 )
 
 var (
-	frontendURI = os.Getenv("FRONTEND_URI")
-	redirectURI = frontendURI + "/results"
-	auth        = spotify.NewAuthenticator(
-		redirectURI,
-		spotify.ScopeUserReadPrivate,
-		spotify.ScopeUserTopRead,
-		spotify.ScopeUserReadRecentlyPlayed,
-		spotify.ScopePlaylistModifyPublic,
-	)
+	frontendURI          = os.Getenv("FRONTEND_URI")
+	redirectURI          = frontendURI + "/results"
 	hashKey, hashErr     = hex.DecodeString(os.Getenv("DISCOVER_HASH"))
 	storeAuth, authErr   = hex.DecodeString(os.Getenv("DISCOVER_AUTH"))
 	storeCrypt, cryptErr = hex.DecodeString(os.Getenv("DISCOVER_CRYPT"))
 	store                = sessions.NewCookieStore(storeAuth, storeCrypt)
 )
+
+var auth *spotify.Authenticator
+
+func init() {
+	fmt.Println(frontendURI)
+	var err error
+
+	auth, err = spotifyservice.Authenticator(redirectURI)
+	if err != nil {
+		log.Printf("stack trace:\n%+v\n", err)
+		os.Exit(1)
+	}
+}
 
 // Login contains the URL configured for Spotify authentication.
 type Login struct {
@@ -115,14 +124,14 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := uid.String()
-	time := time.Now().String()
+	now := time.Now().String()
 
 	sess.Values["id"] = id
-	sess.Values["time"] = time
+	sess.Values["time"] = now
 	delete(sess.Values, "playlist")
 	sess.Save(r, w)
 
-	sum := concatBuf(id, time)
+	sum := concatBuf(id, now)
 	state, err := hash(sum.Bytes())
 	if err != nil {
 		log.Println(err)
@@ -160,12 +169,23 @@ func playlistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nc := auth.NewClient(tok)
-	nc.AutoRetry = true
+	c := auth.NewClient(tok)
+	c.AutoRetry = true
 
-	g := newGenerator(&nc)
+	ms, err := spotifyservice.New(&c)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	pl, err := g.BestPlaylist()
+	scryer, err := scry.New(ms)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	pl, err := scryer.FromTracks("Discover Now")
 	if err != nil {
 		log.Println(err)
 		http.Error(w, "cannot create playlist", http.StatusInternalServerError)
@@ -194,12 +214,12 @@ func authorizeRequest(w http.ResponseWriter, r *http.Request) (*oauth2.Token, er
 		return nil, errors.New("id value not found")
 	}
 
-	time, ok := sess.Values["time"].(string)
+	tm, ok := sess.Values["time"].(string)
 	if !ok {
 		return nil, errors.New("time value not found")
 	}
 
-	sum := concatBuf(id, time)
+	sum := concatBuf(id, tm)
 	state, err := hash(sum.Bytes())
 	if err != nil {
 		return nil, err
