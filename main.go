@@ -65,7 +65,7 @@ func main() {
 
 	api := r.PathPrefix("/api/v1/").Subrouter()
 	api.HandleFunc("/login", loginHandler)
-	api.HandleFunc("/playlist", playlistHandler)
+	api.Handle("/playlist", errHandler(playlistHandler))
 
 	srv := &http.Server{
 		Handler:      handlers.LoggingHandler(os.Stdout, r),
@@ -74,6 +74,20 @@ func main() {
 		ReadTimeout:  15 * time.Second,
 	}
 	log.Fatal(srv.ListenAndServe())
+}
+
+type serverError struct {
+	Error   error
+	Message string
+	Code    int
+}
+
+type errHandler func(http.ResponseWriter, *http.Request) *serverError
+
+func (fn errHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if err := fn(w, r); err != nil {
+		http.Error(w, err.Message, err.Code)
+	}
 }
 
 // loginHandler responds to requests with an authorization URL configured for a
@@ -90,12 +104,14 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 // using the authenticated user's playback data. This URI is stored in the
 // user's session and is used as the response to any further requests unless
 // the URI is cleared from the session.
-func playlistHandler(w http.ResponseWriter, r *http.Request) {
+func playlistHandler(w http.ResponseWriter, r *http.Request) *serverError {
 	tok, err := authorizeRequest(w, r)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return &serverError{
+			Error:   err,
+			Message: "Cannot authorize Spotify request",
+			Code:    http.StatusBadGateway,
+		}
 	}
 
 	c := auth.NewClient(tok)
@@ -103,41 +119,53 @@ func playlistHandler(w http.ResponseWriter, r *http.Request) {
 
 	serv, err := spotifyservice.New(&c)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return &serverError{
+			Error:   err,
+			Message: "Something went wrong while initializing Spotify service",
+			Code:    http.StatusInternalServerError,
+		}
 	}
 
 	buf, err := buffer.New(serv)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return &serverError{
+			Error:   err,
+			Message: "Something went wrong while initializing service buffer",
+			Code:    http.StatusInternalServerError,
+		}
 	}
 
 	gen, err := refind.New(buf, serv)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return &serverError{
+			Error:   err,
+			Message: "Something went wrong while initializing the refind client",
+			Code:    http.StatusInternalServerError,
+		}
 	}
 
 	list, err := gen.Tracklist(playlistLimit)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return &serverError{
+			Error:   err,
+			Message: "Something went wrong while generating track list",
+			Code:    http.StatusInternalServerError,
+		}
 	}
 
 	pl, err := serv.Playlist("Discover Now", list)
 	if err != nil {
-		log.Println(err)
-		http.Error(w, "cannot create playlist", http.StatusInternalServerError)
-		return
+		return &serverError{
+			Error:   err,
+			Message: "Something went wrong while creating the user's playlist",
+			Code:    http.StatusInternalServerError,
+		}
 	}
 
 	payload := Playlist{URI: string(pl.URI)}
 	render.JSON(w, r, payload)
+
+	return nil
 }
 
 // authorizeRequest returns an oauth2 token authenticated for access to a
