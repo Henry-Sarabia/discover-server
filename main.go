@@ -17,7 +17,6 @@ import (
 const (
 	frontendURI   string = "http://127.0.0.1:3000"
 	state         string = "abc123"
-	playlistLimit int    = 30
 )
 
 var (

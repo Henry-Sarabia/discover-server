@@ -6,9 +6,15 @@ import (
 	"github.com/go-chi/render"
 	"golang.org/x/oauth2"
 	"net/http"
+	"strings"
 
 	adj "github.com/nii236/adjectiveadjectiveanimal"
 	spotifyservice "github.com/Henry-Sarabia/refind/spotify"
+)
+
+const (
+	playlistLimit int    = 30
+	playlistDescription string = "Curated by Discover Now"
 )
 
 // Playlist contains the URI of a user's playlist.
@@ -69,7 +75,9 @@ func playlistHandler(w http.ResponseWriter, r *http.Request) *serverError {
 		}
 	}
 
-	pl, err := serv.Playlist("Discover Now: " + adj.GenerateCombined(1, "-"), list)
+	t := strings.Title(adj.GenerateCombined(1, "-"))
+
+	pl, err := serv.Playlist(t, playlistDescription, list)
 	if err != nil {
 		return &serverError{
 			Error:   err,
