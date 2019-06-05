@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	spotifyservice "github.com/Henry-Sarabia/refind/spotify"
 	"log"
 	"net/http"
@@ -15,21 +14,17 @@ import (
 )
 
 const (
-	frontendURI   string = "http://127.0.0.1:3000"
-	state         string = "abc123"
-)
-
-var (
-	redirectURI = frontendURI + "/results"
+	frontendURI  string = "http://127.0.0.1:3000"
+	redirectPath string = "/results"
+	state        string = "abc123"
 )
 
 var auth *spotify.Authenticator
 
 func init() {
-	fmt.Println(frontendURI)
 	var err error
 
-	auth, err = spotifyservice.Authenticator(redirectURI)
+	auth, err = spotifyservice.Authenticator(frontendURI+ redirectPath)
 	if err != nil {
 		log.Printf("stack trace:\n%+v\n", err)
 		os.Exit(1)
