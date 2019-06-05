@@ -7,6 +7,7 @@ import (
 	"golang.org/x/oauth2"
 	"net/http"
 
+	adj "github.com/nii236/adjectiveadjectiveanimal"
 	spotifyservice "github.com/Henry-Sarabia/refind/spotify"
 )
 
@@ -68,7 +69,7 @@ func playlistHandler(w http.ResponseWriter, r *http.Request) *serverError {
 		}
 	}
 
-	pl, err := serv.Playlist("Discover Now", list)
+	pl, err := serv.Playlist("Discover Now: " + adj.GenerateCombined(1, "-"), list)
 	if err != nil {
 		return &serverError{
 			Error:   err,
