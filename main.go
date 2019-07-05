@@ -17,58 +17,73 @@ import (
 )
 
 const (
-	frontendURI   string = "http://127.0.0.1:3000"
-	redirectPath  string = "/results"
-	state         string = "abc123"
-	hashKeyEnv    string = "DISCOVER_HASH"
-	storeAuthEnv  string = "DISCOVER_AUTH"
-	storeCryptEnv string = "DISCOVER_CRYPT"
+	redirectPath    string = "/results"
+	state           string = "abc123"
+	hashKeyName     string = "DISCOVER_HASH"
+	storeAuthName   string = "DISCOVER_AUTH"
+	storeCryptName  string = "DISCOVER_CRYPT"
+	frontendURIName string = "FRONTEND_URI"
 )
 
 var (
-	auth       *spotify.Authenticator
-	hashKey    string
-	storeAuth  string
-	storeCrypt string
-	store      sessions.CookieStore
+	hashKey     string
+	storeAuth   string
+	storeCrypt  string
+	store       sessions.CookieStore
+	frontendURI string
+	auth        *spotify.Authenticator
 )
 
 func init() {
 	var err error
 
+	hashKey, err = decodeEnv(hashKeyName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	storeAuth, err = decodeEnv(storeAuthName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	storeCrypt, err = decodeEnv(storeCryptName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	frontendURI, err = getEnv(frontendURIName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	auth, err = spotifyservice.Authenticator(frontendURI + redirectPath)
 	if err != nil {
 		log.Fatalf("stack trace:\n%+v\n", err)
 	}
-
-	hashKey, err = decodeEnv(hashKeyEnv)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	storeAuth, err = decodeEnv(storeAuthEnv)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	storeCrypt, err = decodeEnv(storeCryptEnv)
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
-func decodeEnv(env string) (string, error) {
-	s, ok := os.LookupEnv(env)
-	if !ok {
-		return "", errors.Errorf("environment variable '%s' is missing", env)
-	}
-
-	h, err := hex.DecodeString(s)
+func decodeEnv(name string) (string, error) {
+	env, err := getEnv(name)
 	if err != nil {
-		return "", errors.Wrapf(err, "environment variable '%s' cannot be decoded from hex", env)
+		return "", err
 	}
 
-	return string(h), nil
+	d, err := hex.DecodeString(env)
+	if err != nil {
+		return "", errors.Wrapf(err, "environment variable with name '%s' cannot be decoded from hex", name)
+	}
+
+	return string(d), nil
+}
+
+func getEnv(name string) (string, error) {
+	env, ok := os.LookupEnv(name)
+	if !ok {
+		return "", errors.Errorf("environment variable with name '%s' cannot be found", name)
+	}
+
+	return env, nil
 }
 
 func main() {
